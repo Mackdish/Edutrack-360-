@@ -1,0 +1,171 @@
+// === server.js ===
+const express = require('express');
+const mongoose = require('mongoose');
+const cors = require('cors');
+require('dotenv').config();
+
+const app = express();
+app.use(cors());
+app.use(express.json());
+
+app.use('/api/students', require('./routes/students'));
+app.use('/api/fees', require('./routes/fees'));
+app.use('/api/exams', require('./routes/exams'));
+app.use('/api/attendance', require('./routes/attendance'));
+app.use('/api/reports', require('./routes/reports'));
+
+const PORT = process.env.PORT || 5000;
+mongoose.connect(process.env.MONGODB_URI, {
+  useNewUrlParser: true, useUnifiedTopology: true
+}).then(() => {
+  console.log('MongoDB connected');
+  app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+}).catch(err => console.error(err));
+
+
+// === models/Student.js ===
+const mongoose = require('mongoose');
+const StudentSchema = new mongoose.Schema({
+  name: String,
+  class: String,
+  phone: String
+});
+module.exports = mongoose.model('Student', StudentSchema);
+
+
+// === models/Fee.js ===
+const FeeSchema = new mongoose.Schema({
+  studentId: String,
+  amount: Number,
+  phone: String,
+  paymentMethod: String
+});
+module.exports = mongoose.model('Fee', FeeSchema);
+
+
+// === models/Exam.js ===
+const ExamSchema = new mongoose.Schema({
+  studentId: String,
+  subject: String,
+  score: Number,
+  phone: String
+});
+module.exports = mongoose.model('Exam', ExamSchema);
+
+
+// === models/Attendance.js ===
+const AttendanceSchema = new mongoose.Schema({
+  studentId: String,
+  date: Date,
+  status: String
+});
+module.exports = mongoose.model('Attendance', AttendanceSchema);
+
+
+// === models/Report.js ===
+const ReportSchema = new mongoose.Schema({
+  studentId: String,
+  summary: String
+});
+module.exports = mongoose.model('Report', ReportSchema);
+
+
+// === utils/sms.js ===
+const africastalking = require('africastalking')({
+  apiKey: process.env.AT_API_KEY,
+  username: process.env.AT_USERNAME
+});
+const sms = africastalking.SMS;
+const sendSMS = async (to, message) => {
+  try {
+    await sms.send({ to: [`+254${to}`], message });
+    console.log(`SMS sent to ${to}`);
+  } catch (err) {
+    console.error('SMS Error:', err);
+  }
+};
+module.exports = sendSMS;
+
+
+// === routes/students.js ===
+const express = require('express');
+const router = express.Router();
+const Student = require('../models/Student');
+router.post('/', async (req, res) => {
+  const student = new Student(req.body);
+  await student.save();
+  res.send({ message: 'Student added' });
+});
+router.get('/', async (req, res) => {
+  const students = await Student.find();
+  res.send(students);
+});
+module.exports = router;
+
+
+// === routes/fees.js ===
+const express = require('express');
+const router = express.Router();
+const Fee = require('../models/Fee');
+const sendSMS = require('../utils/sms');
+router.post('/', async (req, res) => {
+  const fee = new Fee(req.body);
+  await fee.save();
+  await sendSMS(fee.phone, `Hi, your payment of KES ${fee.amount} has been recorded.`);
+  res.send({ message: 'Fee recorded & SMS sent' });
+});
+router.get('/', async (req, res) => {
+  const fees = await Fee.find();
+  res.send(fees);
+});
+module.exports = router;
+
+
+// === routes/exams.js ===
+const express = require('express');
+const router = express.Router();
+const Exam = require('../models/Exam');
+const sendSMS = require('../utils/sms');
+router.post('/', async (req, res) => {
+  const exam = new Exam(req.body);
+  await exam.save();
+  await sendSMS(req.body.phone, `Exam score recorded: ${exam.subject} - ${exam.score} marks.`);
+  res.send({ message: 'Exam saved & SMS sent' });
+});
+router.get('/', async (req, res) => {
+  const exams = await Exam.find();
+  res.send(exams);
+});
+module.exports = router;
+
+
+// === routes/attendance.js ===
+const express = require('express');
+const router = express.Router();
+const Attendance = require('../models/Attendance');
+router.post('/', async (req, res) => {
+  const record = new Attendance(req.body);
+  await record.save();
+  res.send({ message: 'Attendance saved' });
+});
+router.get('/', async (req, res) => {
+  const records = await Attendance.find();
+  res.send(records);
+});
+module.exports = router;
+
+
+// === routes/reports.js ===
+const express = require('express');
+const router = express.Router();
+const Report = require('../models/Report');
+router.post('/', async (req, res) => {
+  const report = new Report(req.body);
+  await report.save();
+  res.send({ message: 'Report saved' });
+});
+router.get('/', async (req, res) => {
+  const reports = await Report.find();
+  res.send(reports);
+});
+module.exports = router;
